@@ -1,0 +1,22 @@
+[Unit]
+Description=Automatically Add Notes Under the Inbox Header in Daily Markdown Notes
+
+[Service]
+Type=simple
+
+# Edit these two paths to your setup
+Environment=WATCH_DIR=%h/Obsidian_Vault/
+Environment=DAILY_DIR=%h/Obsidian_Vault/path/to/daily-notes
+
+# If python isn't in PATH for user services, use full path to python3
+ExecStart=%h/scripts/obsidian-watcher/.venv/bin/python3.13 %h/scripts/obsidian-watcher/main.py --watch-dir ${WATCH_DIR} --daily-dir ${DAILY_DIR}
+Restart=on-failure
+RestartSec=10
+
+# Hardening (optional)
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
