@@ -7,7 +7,7 @@ Notes must be named `YYYYMMDDHHMM.md`. Daily notes must be named `YYYY-MM-DD.md`
 ## Requirements
 
 - Python 3.9+
-- watchdog (`pip install watchdog`)
+- watchdog (`uv add watchdog`)
 - systemd (for running as a background service)
 
 ## Behavior
