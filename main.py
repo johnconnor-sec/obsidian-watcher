@@ -205,9 +205,7 @@ class NewFileHandler(FileSystemEventHandler):
         daily = ensure_daily_note(self.daily_dir)
 
         # Links should be relative to daily note directory so they work in editors like Obsidian
-        # rel = _posix_relpath(p.resolve(), start=self.daily_dir)
         p_resolved = p.resolve()
-        # p_resolved.relative_to(self.watch_root)
         vault_relative = p_resolved.relative_to(self.watch_root).as_posix()
         vault_relative = re.sub(r"\.conform\.\d+\.", "", vault_relative)
         # title = derive_title_from_header(p)

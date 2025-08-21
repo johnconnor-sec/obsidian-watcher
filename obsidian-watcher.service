@@ -9,7 +9,7 @@ Environment=WATCH_DIR=%h/Obsidian_Vault/
 Environment=DAILY_DIR=%h/Obsidian_Vault/path/to/daily-notes
 
 # If python isn't in PATH for user services, use full path to python3
-ExecStart=%h/scripts/obsidian-watcher/.venv/bin/python3.13 %h/scripts/obsidian-watcher/main.py --watch-dir ${WATCH_DIR} --daily-dir ${DAILY_DIR}
+ExecStart=%h/path/to/obsidian-watcher/.venv/bin/python3.13 %h/path/to/obsidian-watcher/main.py --watch-dir ${WATCH_DIR} --daily-dir ${DAILY_DIR}
 Restart=on-failure
 RestartSec=10
 

@@ -1,5 +1,11 @@
 # Obsidian Daily Note Watcher
 
+A bespoke
+
+> [!note]
+> This is meant to be a simple background script to add some automation to a user of **CLI** based note-making applications like `obsidian.nvim`, `zk`, `vimwiki`, and others.
+> This functionality is most likely achievable within the Obsidian application, and possibly within some of the CLI based applications.
+
 Watches a vault directory for new Markdown notes.  
 When a new note is created on the same day as the current daily note, its H1 heading is linked under the `## Inbox` section of that daily note.  
 Notes must be named `YYYYMMDDHHMM.md`. Daily notes must be named `YYYY-MM-DD.md`.
@@ -25,78 +31,40 @@ Notes must be named `YYYYMMDDHHMM.md`. Daily notes must be named `YYYY-MM-DD.md`
 In `obsidian-watcher.service`:
 
 ```
-
 # Edit these two paths to your setup
 
 Environment=WATCH\_DIR=%h/Obsidian\_Vault
 Environment=DAILY\_DIR=%h/Obsidian\_Vault/path/to/daily-notes
 
+{{...SNIP...}}
+
+ExecStart=%h/path/to/obsidian-watcher/.venv/bin/python3.13 %h/path/to/obsidian-watcher/main.py --watch-dir ${WATCH_DIR} --daily-dir ${DAILY_DIR}
 ```
 
 `WATCH_DIR` is the vault root.  
 `DAILY_DIR` is the directory where daily notes are stored.
+`ExecStart` is the path to your installation
+
+> [!NOTE]
+> The `%h` is there to tell systemd "start at the user's home directory".
+> Do not paste your full path unless you install in a location other than `/home/$USER`
 
 ## Installation
 
-1. Copy `main.py` to a stable path, e.g. `~/.local/bin/obsidian-watcher.py`.
-2. Make it executable:
-
-```
-
-chmod +x \~/.local/bin/obsidian-watcher.py
-
-```
-
-3. Place `obsidian-watcher.service` into `~/.config/systemd/user/`.
-4. Reload systemd:
-
-```
-
-systemctl --user daemon-reload
-
-```
-
-5. Enable service at login:
-
-```
-
-systemctl --user enable obsidian-watcher.service
-
-```
+1. Clone the repo: `git clone https://github.com/johnconnor-sec/obsidian-watcher`.
+2. Run: `uv sync`.
+3. Copy the path from your home directory to your cloned repo and replace `/patn/to` with it in the example below:
+   `ExecStart=%h/path/to/obsidian-watcher/.venv/bin/python3.13 %h/path/to/obsidian-watcher/main.py --watch-dir ${WATCH_DIR} --daily-dir ${DAILY_DIR}` .
+4. Place `obsidian-watcher.service` into `~/.config/systemd/user/`.
+5. Reload systemd: `systemctl --user daemon-reload`
+6. Enable service at login: `systemctl --user enable obsidian-watcher.service`
 
 ### Service Management
 
-Start:
-
-```
-
-systemctl --user start obsidian-watcher.service
-
-```
-
-Stop:
-
-```
-
-systemctl --user stop obsidian-watcher.service
-
-```
-
-Reload:
-
-```
-
-systemctl --user reload obsidian-watcher.service
-
-```
-
-Logs:
-
-```
-
-journalctl --user -u obsidian-watcher.service -f
-
-```
+Start: `systemctl --user start obsidian-watcher.service`
+Stop: `systemctl --user stop obsidian-watcher.service`
+Reload: `systemctl --user reload obsidian-watcher.service`
+Logs: `journalctl --user -u obsidian-watcher.service -f`
 
 ## Notes
 
