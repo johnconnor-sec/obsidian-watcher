@@ -61,10 +61,10 @@ ExecStart=%h/path/to/obsidian-watcher/.venv/bin/python3.13 %h/path/to/obsidian-w
 
 ### Service Management
 
-Start: `systemctl --user start obsidian-watcher.service`
-Stop: `systemctl --user stop obsidian-watcher.service`
-Reload: `systemctl --user reload obsidian-watcher.service`
-Logs: `journalctl --user -u obsidian-watcher.service -f`
+- Start: `systemctl --user start obsidian-watcher.service`
+- Stop: `systemctl --user stop obsidian-watcher.service`
+- Reload: `systemctl --user reload obsidian-watcher.service`
+- Logs: `journalctl --user -u obsidian-watcher.service -f`
 
 ## Notes
 
