@@ -17,6 +17,7 @@ from watchdog.events import (
 from watchdog.observers import Observer
 
 INBOX_HEADER = "## Inbox"
+SAVED_ARTICLES_HEADER = "### Saved Articles"
 DAILY_FILENAME_FORMAT = "%Y-%m-%d"  # results in e.g. 2025-08-18.md
 MD_EXTS = {".md", ".markdown"}
 H1_RE = re.compile(r"^\s*#\s+(.+?)\s*$")
@@ -71,6 +72,13 @@ def _is_note_from_today(path: Path) -> bool:
     return m.group("ymd") == datetime.now().strftime("%Y%m%d")
 
 
+def _header_level(line: str) -> int | None:
+    s = line.lstrip()
+    if not s.startswith("#"):
+        return None
+    return len(s) - len(s.lstrip("#"))
+
+
 def _normalize_md_link_url(url: str, base_dir: Path) -> str:
     # Ignore web links; they won’t match file paths anyway
     if url.startswith(("http://", "https://")):
@@ -83,55 +91,98 @@ def _normalize_md_link_url(url: str, base_dir: Path) -> str:
     return p.as_posix()
 
 
-def add_link_under_inbox(daily_note: Path, title: str, link_url: str):
+def add_link_under_inbox(
+    daily_note: Path, title: str, link_url: str, sub_header: str | None = None
+):
     """
-    Insert '- [title](link_url)' under '## Inbox', de-duping by the normalized link target.
+    Insert '- [title](link_url)' under '## Inbox'. If sub_header is provided (e.g., '### Saved Articles'),
+    insert under that sub-section (creating it if missing). De-duplicate by normalized link target within
+    the chosen block. Inbox ends only at the next header of level <= 2. The sub-section ends at the next
+    header of level <= the sub-section level.
     """
     text = daily_note.read_text(encoding="utf-8")
     lines = text.splitlines()
 
-    # Locate '## Inbox'
-    header_idx = None
+    # 1) Locate or create '## Inbox'
+    inbox_idx = None
     for i, line in enumerate(lines):
         if line.strip() == INBOX_HEADER:
-            header_idx = i
+            inbox_idx = i
             break
-    if header_idx is None:
+    if inbox_idx is None:
         lines += ["", INBOX_HEADER, ""]
-        header_idx = len(lines) - 2
+        inbox_idx = len(lines) - 2
 
-    # Range of the Inbox section
-    next_header_idx = None
-    for i in range(header_idx + 1, len(lines)):
-        if lines[i].lstrip().startswith("#"):
-            next_header_idx = i
+    # Compute Inbox block: from after '## Inbox' until next header with level <= 2
+    inbox_start = inbox_idx + 1
+    inbox_end = len(lines)
+    for i in range(inbox_start, len(lines)):
+        lvl = _header_level(lines[i])
+        if lvl is not None and lvl <= 2:
+            inbox_end = i
             break
-    start_idx = header_idx + 1
-    end_idx = next_header_idx if next_header_idx is not None else len(lines)
 
-    # Build a set of normalized existing link targets in the Inbox block
-    inbox_block = lines[start_idx:end_idx]
+    # 2) If a sub_header is requested, locate/create it inside the Inbox block
+    block_start, block_end = inbox_start, inbox_end
+    if sub_header:
+        # Determine the sub_header level (count '#')
+        sub_level = _header_level(sub_header) or 3  # '### Saved Articles' -> 3
+
+        # Find existing sub_header within the Inbox range
+        sub_idx = None
+        for i in range(inbox_start, inbox_end):
+            if lines[i].strip() == sub_header:
+                sub_idx = i
+                break
+
+        if sub_idx is None:
+            # Ensure a blank immediately after '## Inbox'
+            insert_at = inbox_start
+            if insert_at < len(lines) and lines[insert_at].strip() != "":
+                lines.insert(insert_at, "")
+                insert_at += 1
+                inbox_end += 1  # shift end since we inserted inside Inbox
+
+            # Insert the sub_header and a following blank
+            lines.insert(insert_at, sub_header)
+            lines.insert(insert_at + 1, "")
+            sub_idx = insert_at
+            inbox_end += 2  # account for the two inserted lines
+
+        # Sub-block runs until next header with level <= sub_level or end of Inbox block
+        block_start = sub_idx + 1
+        block_end = inbox_end
+        for i in range(block_start, inbox_end):
+            lvl = _header_level(lines[i])
+            if lvl is not None and lvl <= sub_level:
+                block_end = i
+                break
+
+    # 3) De-duplicate by normalized link target inside the chosen block
+    inbox_block = lines[block_start:block_end]
     link_re = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
     existing_targets = set()
     base_dir = daily_note.parent
     for ln in inbox_block:
         m = link_re.search(ln)
-        if not m:
-            continue
-        existing_targets.add(_normalize_md_link_url(m.group(1).strip(), base_dir))
+        if m:
+            existing_targets.add(_normalize_md_link_url(m.group(1).strip(), base_dir))
 
     new_target = _normalize_md_link_url(link_url, base_dir)
     if new_target in existing_targets:
-        return  # already listed; do nothing
+        return  # already present in this block
 
     bullet = f"- [{title}]({link_url})"
 
-    # Keep a blank after the header, then insert
-    insert_line = start_idx
-    if start_idx < len(lines) and lines[start_idx].strip() != "":
-        lines.insert(start_idx, "")
+    # Keep a blank line at the start of the chosen block for readability
+    insert_line = block_start
+    if insert_line < len(lines) and lines[insert_line].strip() != "":
+        lines.insert(insert_line, "")
         insert_line += 1
-        end_idx += 1
+        # Adjust block_end since we inserted within it
+        block_end += 1
+        if sub_header is None:
+            inbox_end += 1
 
     lines.insert(insert_line, bullet)
     new_text = "\n".join(lines).rstrip() + "\n"
@@ -210,7 +261,12 @@ class NewFileHandler(FileSystemEventHandler):
         vault_relative = re.sub(r"\.conform\.\d+\.", "", vault_relative)
         # title = derive_title_from_header(p)
 
-        add_link_under_inbox(daily, h1_title, vault_relative)
+        # Decide destination: RSS files go under '### Saved Articles' inside Inbox
+        rel_from_vault = p_resolved.relative_to(self.watch_root).as_posix()
+        is_rss = rel_from_vault.startswith("Inbox/RSS_Feed/")
+
+        sub_header = SAVED_ARTICLES_HEADER if is_rss else None
+        add_link_under_inbox(daily, h1_title, vault_relative, sub_header=sub_header)
 
     def _is_in_daily_dir(self, p: Path) -> bool:
         try:
@@ -277,7 +333,7 @@ def main():
     observer.schedule(handler, str(watch_root), recursive=True)
     observer.start()
     logging.info(
-        f"[ok] Watching {watch_root} -> daily notes in {daily_dir}. `systemctl --user stop obsidian-watcher.service`  to stop."
+        f"[ok] Watching {watch_root} -> daily notes in {daily_dir}. `systemctl --user stop obsidian-watcher.service` to stop."
     )
     try:
         while True:
